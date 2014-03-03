@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<title>Prototype</title>
+	<link rel="stylesheet" type="text/css" href="styles.css" />
+	<!--fonts-->
+	<link href='http://fonts.googleapis.com/css?family=Dosis:400,800' rel='stylesheet' type='text/css'>
+	<link href='http://fonts.googleapis.com/css?family=Knewave' rel='stylesheet' type='text/css'>
+	
+	<script src="scripts/utils.js"></script>
+	<script src="scripts/animal.js"></script>
+	<script src="scripts/player.js"></script>
+	<script src="scripts/enemy.js"></script>
+	<script>
+		"use strict";
+		//window.addEventListener("load", init);
+		window.addEventListener("load", loadImages);
+		
+		//CONSTANTS
+		var CANVAS_WIDTH = 850; //640;
+		var CANVAS_HEIGHT = 600; //480;
+		var KEYBOARD = {
+			"KEY_LEFT": 37,
+			"KEY_UP": 38,
+			"KEY_RIGHT": 39,
+			"KEY_DOWN": 40,
+			"KEY_SPACE": 32
+		};
+		var IMAGE_SOURCES = {
+			playerwalkImage: "images/playerwalk.png",
+			bunnyImage: "images/bunny.png",
+			tigerImage: "images/tiger.png",
+			backgroundImage: "images/background.png",
+			grannyImage: "images/granny2.png",
+			boyImage: "images/boy2.png",
+			menuImage: "images/menu.png"
+		};
+		
+		var ENEMY_PROB_SEC = 0.5;
+		
+		//fire rate of animals
+		var FIRE_RATE = 10;
+		
+		//GLOBALS
+		var ctx;
+		var player;
+		var critter;
+		var paused = true;
+		var lastTime = 0;
+		var keydown = [];
+		var images = {};
+		var isFaceLeft = true;
+		
+			//added globals 3/30/2013
+		var playerAnimals = []; //the array of animals
+		var cooldown = 0; //animal shooting cooldown
+		
+			//added globals 4/02/2013
+		var enemies = [];
+		var spawnNum; // Will the enemy be a child or an old lady? (A Random Number in Draw Enemy)
+		var spawnW; // Number whether the enemy spawns left or right. (A random Number)
+		var sLeft; // Will the enemy spawn from the right or the left? (Boolean)
+		
+			//added 4/08/2013
+		var grannyScore = 0;
+		var boyScore = 0;
+		var hitPoints = 10;
+		var gameOver = false;
+		
+		function init(){
+			var canvasElement = document.querySelector("canvas");
+			canvasElement.width = CANVAS_WIDTH;
+			canvasElement.height = CANVAS_HEIGHT;
+			
+			// 2D Rendering Context
+			ctx = canvasElement.getContext("2d");
+			
+			ctx.drawImage(images["menuImage"],
+			0,0,850,600,
+			0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+			
+			ctx.font = "bold 65px Dosis";
+			
+			ctx.fillStyle = "#B2D1F0";
+			ctx.strokeStyle= "black";
+			ctx.lineWidth = 3;
+			ctx.fillText("Critter Shooter",60,160);
+			ctx.strokeText("Critter Shooter",60,160);
+			
+			ctx.font="bold 35px Dosis";
+			
+			
+			
+			ctx.fillStyle = "#fff";
+			ctx.fillText("Start game",80,CANVAS_HEIGHT - 250);
+			ctx.fillText("(press enter)",67,CANVAS_HEIGHT - 210);
+			ctx.fillText("How to Play", 80, CANVAS_HEIGHT - 150);
+			ctx.fillText("(press h)", 90, CANVAS_HEIGHT - 110);
+			
+
+			/*
+			
+			Event Listeners 
+			
+			*/
+			
+			window.addEventListener("keydown", function(e){
+				console.log("keydown=" + e.keyCode);
+				keydown[e.keyCode] = true;
+				});
+				
+			window.addEventListener("keyup", function(e){
+				console.log("keyup=" + e.keyCode);
+				keydown[e.keyCode] = false;
+				player.counter =0;
+				});
+				
+			animate();
+		}
+		
+		function showInstructions() {
+			ctx.fillStyle = "rgba(8,84,169,0.7)";
+			ctx.fillRect(0,0,CANVAS_WIDTH,CANVAS_HEIGHT);
+			
+			ctx.font = "25px Dosis";
+			ctx.fillStyle = "#fff";
+			ctx.fillText("Move and jump by pressing the arrow keys",70,80);
+			ctx.fillText("Hold z to shoot bunnies!",70,160);
+			ctx.fillText("Hold x to shoot cats!",70,200);
+//			ctx.fillText("Your enemies will be the grannies and the little boys running at you",70,280);
+			ctx.fillText("Shoot the bunnies and cats to defeat your enemies!",70,300);
+			ctx.fillText("Grannies are vulnerable to cats",70,500);
+			ctx.fillText("Boys are vulnerable to bunnies",500,500);
+			
+			ctx.font = " bold 27px Dosis";
+			ctx.fillText("Press enter to begin",300,570);
+			
+			ctx.drawImage(images["bunnyImage"],300,110,50,50);
+			ctx.drawImage(images["tigerImage"],260,170,50,50);
+			ctx.drawImage(images["grannyImage"],1094, 0, 545, 804,180,330,92,134);
+			ctx.drawImage(images["boyImage"],942, 0, 471, 546,600,360,78.5,91);
+
+		}
+		
+		function startGame() {
+			
+			animate();
+		}
+		
+		// HELPERS
+		
+		function dtr(degrees){
+		return degrees * Math.PI / 180; 
+		}	
+		
+		function calculateDeltaTime(){
+			var now, fps;
+			now = (+new Date);
+			fps = 1000/(now - lastTime);
+			fps = clamp(fps, 12, 60);
+			lastTime = now;
+			return 1/fps;
+		}
+		
+		function drawBackground(){
+			
+			ctx.drawImage(images["backgroundImage"],
+			0,0,850,600,
+			0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+			
+			//ctx.fillStyle = grad;
+			//ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+		}
+		
+		function loadImages(){
+			var numLoadedImages = 0;
+			var numImages = 0;
+			for(var imageName in IMAGE_SOURCES){
+				numImages++;
+			}
+			
+			for(var imageName in IMAGE_SOURCES){
+				console.log("Started loading " + imageName);
+				images[imageName] = new Image();
+				images[imageName].src = IMAGE_SOURCES[imageName];
+				
+				images[imageName].onload = function(){
+					console.log(this.src + " load complete!");
+					if(++numLoadedImages >= numImages){
+						console.log("Done loading Images");
+						init();
+					}
+				};
+			}
+		}
+		
+		function animate(){
+			var dt = calculateDeltaTime();
+			
+			if(gameOver){
+				gameOverUpdate();
+			}
+			else if(!paused){
+				update(dt);
+				drawBackground();
+				drawSprites();
+				if(!gameOver)
+					drawScore();
+				else
+					drawGameOver();
+			} else {
+				menuUpdate(dt);
+			
+			}
+			
+			window.requestAnimFrame(animate);
+			
+		}
+		
+		function menuUpdate(dt){
+			if(keydown[13]){
+				console.log("game has started");
+				paused = false;
+			}
+			
+			if(keydown[72]){
+				showInstructions();
+				console.log("instructions will be shown");
+			}
+		}
+		
+		function update(dt){
+		
+			if(keydown[KEYBOARD.KEY_LEFT]){
+				isFaceLeft = true;
+				player.x -= player.speed * dt;
+				player.counter++;
+			}
+			
+			if(keydown[KEYBOARD.KEY_RIGHT]){
+				isFaceLeft = false;
+				player.x += player.speed * dt;
+				player.counter++;
+			}
+			
+			if(keydown[KEYBOARD.KEY_UP]){
+				player.grounded = false;
+				player.counter = 0;
+				player.speed = 200;
+			}
+		
+			// player.x += player.speed * dt;
+			// console.log(dt);
+			
+			player.x = clamp(player.x,0, CANVAS_WIDTH);
+			player.y = clamp(player.y,0, CANVAS_HEIGHT);
+			
+			
+			
+			/*
+
+				ANIMAL THROWING
+				
+			*/
+			
+			cooldown --;
+			//poll keyboard
+			if(cooldown <= 0 && keydown[90]){
+				shoot(player.x,player.y,"grey");
+				cooldown = 60/FIRE_RATE;
+				console.log("bunny shot");
+			}
+			
+			if(cooldown <= 0 && keydown[88]){
+				shoot(player.x,player.y,"orange");
+				cooldown = 60/FIRE_RATE; 
+			}
+			
+			//array.forEach() is cooler than a for loop
+			playerAnimals.forEach(function(animal) {
+				animal.update(dt);
+			});
+			
+			//array.filter() returns a new array with only active bullets
+			playerAnimals = playerAnimals.filter(function(animal){
+				return animal.active;
+			});
+			
+			/*
+
+				PLAYER JUMP
+				
+			*/
+			
+			//if the player is jumping or falling, move along the sine wave
+			if(!player.grounded){
+				//last position on sine wave
+				var lastHeight = player.jumpSinWaveSpeed *dt;
+				//new position on sine wave
+				player.jumpSinWavePos += player.jumpSinWaveSpeed * dt;
+				//we have fallen off the bottom of the sine wave, so
+				//continue falling at a predetermined speed
+				if(player.jumpSinWavePos >= Math.PI)
+					player.y += player.jumpHeight / player.jumpHangTime * player.fallMultiplier * dt;
+				//otherwise move along sine wave
+				else
+					player.y -= (Math.sin(player.jumpSinWavePos) - Math.sin(lastHeight)) * player.jumpHeight;
+			}
+			
+			//Check if player has hit the ground
+			//highest point under player
+			var groundHeight = 500;
+			//console.log(groundHeight + " = " + (CANVAS_HEIGHT - (player.y+10)));
+			//the player's height (relative to the bottom of the screen)
+			var playerHeight = player.y + player.height;
+			
+			//we have hit the ground
+			if(!player.grounded && player.jumpSinWavePos > 1 && groundHeight <= playerHeight){
+				player.y = 400;
+				console.log(playerHeight);
+				player.grounded = true;
+				player.jumpSinWavePos = 0;
+			}
+			
+			/*
+
+				ENEMY SPAWN
+				
+			*/
+			
+			enemies.forEach(function(enemy){
+				enemy.update(dt);
+			});
+			
+			enemies = enemies.filter(function(enemy){
+				return enemy.active;
+			});
+			
+			//Math.floor(Math.random() * highest number) + lowest number
+			
+			//this determines who the enemy is, and where they will spawn
+			if(Math.random() < ENEMY_PROB_SEC/60){
+				spawnW = Math.random()* 10;
+				spawnNum = Math.random() * 10;
+				if(spawnW >= 5){sLeft = true}else{sLeft = false};
+				if(spawnNum >= 5){
+					var sw = 78.5;
+					var sh = 90;
+					var sColor = "grey";
+					//gray for the boy
+				}else{
+					var sw = 90;					
+					var sh = 135;
+					var sColor = "orange";
+					//orange for the granny
+				}
+				console.log(sLeft + " " + spawnW);
+				if(sLeft == true){
+					var sx = 0;
+					var sSpeed = (Math.random() * 100) + 50;
+					var isLeft = true;
+				}else{
+					var sx = CANVAS_WIDTH;
+					var sSpeed = (Math.random() * -100) -50;
+					var isLeft = false;
+				}
+				enemies.push(new Enemy(sx, sw, sh, sSpeed, sColor,isLeft));
+				console.log("new Enemy Made");
+			}
+			
+			/*
+
+				ENEMY COLLISIONS
+				
+			*/
+			
+			function collides(a, b){
+				return a.x < b.x + b.width/2 &&
+				a.x + a.width/2 > b.x &&
+				a.y < b.y + b.height/2 &&
+				a.y + a.height > b.y;
+			}
+			// When any animal hits any box
+			playerAnimals.forEach(function(animal){
+					enemies.forEach(function(enemy){
+					if(collides(enemy, animal)){
+						if(animal.color == enemy.color){
+								if(enemy.color == "grey") //grey for boy
+									boyScore ++;
+								else
+									grannyScore ++;
+								
+								enemy.run();
+								animal.active = false;
+								
+								console.log("granny points = " + grannyScore);
+								console.log("boy points = " + boyScore);
+						}
+					}
+				});
+			});
+			
+			// if they hit the player...
+			enemies.forEach(function(enemy){
+					if(collides(enemy, player)){
+						enemy.explode();
+						hitPoints --;
+						
+					}
+				});
+			
+			//If player has no more lives...
+			if(hitPoints == 0){
+				gameOver = true;
+			}
+		}
+		
+		function drawSprites(){
+			player.draw(ctx);
+			
+			//draw animals
+			playerAnimals.forEach(function(animal) {
+				animal.draw(ctx);
+			});
+			
+			//draw enemies
+			enemies.forEach(function(enemy){
+				enemy.draw(ctx);
+			});
+		}
+		
+		function drawScore(){
+			ctx.fillStyle = "#fff";
+			ctx.font = "20px Dosis";
+			ctx.fillText("Number of grannies defeated = " + grannyScore, 10,30);
+			ctx.fillText("Number of boys defeated = " + boyScore, 10,60);
+			ctx.font = "27px Dosis";
+			ctx.fillText("Lives left = " + hitPoints, 700,35);
+		}
+		
+		function drawGameOver(){
+			player.active = false;
+			paused = true;
+			ctx.fillStyle = "black";
+			ctx.fillRect(0,0,CANVAS_WIDTH,CANVAS_HEIGHT);
+			ctx.fillStyle = "red";
+			ctx.font = "bold 50px Dosis";
+			
+			ctx.fillText("You have died!", 250,260);
+			ctx.font = "45px Dosis";
+			ctx.fillText("To play again, press enter",200,330);
+		}
+		
+		function gameOverUpdate(dt){
+			if(keydown[13]){
+				console.log("game has restarted");
+				
+				//reset scores
+				grannyScore = 0;
+				boyScore = 0;
+				hitPoints = 10;
+				
+				//remove all enemies at the moment
+				enemies.forEach(function(enemy){
+					enemy.active = false;
+				});
+				gameOver = false;
+				paused = false;
+			}
+		}
+		
+		function shoot(x,y,color){
+			console.log("throw!");
+			if(isFaceLeft)
+				playerAnimals.push(new Animal(x-(player.width/2),y,200,color));
+			else
+				playerAnimals.push(new Animal(x+(player.width/2),y,200,color));
+		}
+		
+		function getRandomInt(min, max) {
+			return (Math.random() * (max - min + 1)) + min;
+		}
+	</script>
+	
+</head>
+<body>
+
+<section>
+<canvas>
+	Get a REAL browser
+</canvas>
+<p>&copy; Julienne Ablay and Lee Ezell, New Media Web Tech II Project 1</p>
+</section>
+</body>
+</html>
